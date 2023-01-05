@@ -1,0 +1,37 @@
+# Compiled source #
+###################
+*.class
+# IDE files #
+#############
+.idea/*
+*.iml
+*.iws
+*.ipr
+# Build output directories #
+#############
+bin/
+out/
+/*/out
+/*/*/build
+/*/build
+build/
+/build/
+/.gradle/
+/*/.gradle/
+/target/
+/*/target/
+/test-output/
+/out/
+/*/out/
+/out.xml
+/classes/
+.settings/
+*.project
+*.classpath
+**/log4j2.xml
+**/test-output/*
+# Mac OS X #
+#############
+# Mac OS X
+.DS_Store
+._*
