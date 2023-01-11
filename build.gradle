@@ -1,9 +1,9 @@
 
 /*
  * *
- *  * Created by SOFTKNIFE on 7/1/20
- *  * Copyright SOFTKNIFE (c) 2021 . All rights reserved.
- *  * Last modified 6/5/21 6:50 PM
+ *  * Created by softknife 2021 on 7/1/21
+ *  * Copyright softknife 2021 (c) 2021 . All rights reserved.
+ *  * Last modified 1/5/23 3:43 PM
  *
  */
 
@@ -14,7 +14,7 @@ plugins {
     id "com.adarshr.test-logger" version "2.1.0"
     id 'signing'
     id 'maven-publish'
-    id 'io.codearte.nexus-staging' version '0.30.0'
+    //id 'io.codearte.nexus-staging' version '0.30.0'
     id "io.freefair.lombok" version "5.0.0-rc4"
     id "io.github.gradle-nexus.publish-plugin" version "1.0.0"
 }
@@ -47,8 +47,8 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.11'
 
     //json/models
-    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.11.2'
-    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.11.2'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.13.2'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.13.2.2'
     implementation group: 'com.jayway.jsonpath', name: 'json-path', version: '2.4.0'
 
     //jira
@@ -62,7 +62,7 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.4'
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
-    implementation 'com.google.guava:guava:28.0-jre'
+    implementation group: 'com.google.guava', name: 'guava', version: '31.1-jre'
 
     //swagger
     implementation group: 'io.swagger', name: 'swagger-core', version: '2.0.0-rc2'
@@ -136,9 +136,10 @@ test {
     }
 }
 
+ext["ossrhUsername"] = findProperty('sonatypeUsername')
+ext["ossrhPassword"] = findProperty('sonatypePassword')
+
 ext.admin = hasProperty('sonatypeUsername')
-println("hie")
-println(hasProperty('sonatypeUsername'))
 
 artifacts {
     archives jar
@@ -151,53 +152,38 @@ signing {
     sign publishing.publications
 }
 
-nexusPublishing {
-    //packageGroup = "com.example.mycompany.myproject"  //defaults to 'project.group'
-
-    repositories {
-        sonatype {   //or custom repository name
-            //stagingProfileId = "yourStagingProfileId" //can reduce execution time by even 10 seconds
-
-            //defaults to project properties 'sonatypeUsername' and 'sonatypePassword', where 'sonatype' is name of configured repository
-            username = project.findProperty("sonatypeUsername")
-            password = project.findProperty("sonatypePassword")
-        }
-    }
-
-    clientTimeout = Duration.ofSeconds(300)
-    connectTimeout = Duration.ofSeconds(60)
-
-    transitionCheckOptions {
-        maxRetries.set(40)
-        delayBetween.set(java.time.Duration.ofMillis(3000))
-    }
-}
-
-
-
-//publishing {
-//    publications {
-//        mavenJava(MavenPublication) {
-//            from components.java
-//            customizePom(pom, rootProject)
-//
-//            artifact sourcesJar
-//            artifact javadocJar
-//        }
-//    }
+//nexusPublishing {
 //    repositories {
-//        maven {
-//            //url "https://oss.sonatype.org/service/local/staging/deploy/maven2"
-//            url "https://s01.oss.sonatype.org/service/local/"
-//            if (admin) {
-//                credentials {
-//                    username 'sonatypeUsername'
-//                    password 'sonatypePassword'
-//                }
-//            }
+//        sonatype {  //only for users registered in Sonatype after 24 Feb 2021
+//            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
+//            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
 //        }
 //    }
 //}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            customizePom(pom, rootProject)
+
+            artifact sourcesJar
+            artifact javadocJar
+        }
+    }
+    repositories {
+        maven {
+            //url "https://s01.oss.sonatype.org/service/local/"
+            url "https://oss.sonatype.org/service/local/staging/deploy/maven2"
+            if (admin) {
+                credentials {
+                    username sonatypeUsername
+                    password sonatypePassword
+                }
+            }
+        }
+    }
+}
 
 model {
     tasks.publish {
@@ -228,8 +214,8 @@ def customizePom(pom, gradleProject) {
             description gradleProject.description
             url 'https://github.com/softknife2021/qreasp'
             organization {
-                name 'Softknife'
-                url 'https://softknife.com'
+                name 'softknife2021'
+                url 'https://softknife2021.com'
             }
             issueManagement {
                 system 'GitHub'
@@ -238,12 +224,12 @@ def customizePom(pom, gradleProject) {
             licenses {
                 license {
                     name 'The Apache Software License, Version 2.0'
-                    url 'https://github.com/softknife2021/qreasp/blob/master/LICENSE'
+                    url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
                     distribution 'repo'
                 }
             }
             scm {
-                url 'https://github.com/softknife/qreasp'
+                url 'https://github.com/softknife2021/qreasp'
                 connection 'scm:git:git://github.com/softknife2021/qreasp.git'
                 developerConnection 'scm:git:ssh://git@github.com/softknife2021/qreasp.git'
             }
