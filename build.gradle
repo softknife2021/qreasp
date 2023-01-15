@@ -14,15 +14,12 @@ plugins {
     id "com.adarshr.test-logger" version "2.1.0"
     id 'signing'
     id 'maven-publish'
-    //id 'io.codearte.nexus-staging' version '0.30.0'
+    id 'maven'
     id "io.freefair.lombok" version "5.0.0-rc4"
     id "io.github.gradle-nexus.publish-plugin" version "1.0.0"
 }
 
 repositories {
-    // Use jcenter for resolving dependencies.
-    // You can declare any Maven/Ivy/file repository here.
-    //TODO jcenter will be sunset soon - find another option
     jcenter()
     mavenCentral()
 }
@@ -119,13 +116,13 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
     from javadoc.destinationDir
 }
 
-if (JavaVersion.current().isJava8Compatible()) {
-    allprojects {
-        tasks.withType(Javadoc) {
-            options.addStringOption('Xdoclint:none', '-quiet')
-        }
-    }
-}
+//if (JavaVersion.current().isJava8Compatible()) {
+//    allprojects {
+//        tasks.withType(Javadoc) {
+//            options.addStringOption('Xdoclint:none', '-quiet')
+//        }
+//    }
+//}
 
 
 test {
@@ -136,10 +133,31 @@ test {
     }
 }
 
-ext["ossrhUsername"] = findProperty('sonatypeUsername')
-ext["ossrhPassword"] = findProperty('sonatypePassword')
 
-ext.admin = hasProperty('sonatypeUsername')
+//task('sourceJar', type: Jar){
+//    classifier('sources')
+//    from sourceSets.main.allSource
+//}
+//
+//task javadocJar(type: Jar) {
+//    classifier('javadoc')
+//    from javadoc
+//}
+
+task('sourceJar', type: Jar){
+    classifier('sources')
+    from sourceSets.main.allSource
+}
+
+//task javadocJar(type: Jar) {
+//    classifier('javadoc')
+//    from javadoc
+//}
+
+ext.user = findProperty('sonatypeUsername')
+ext.password = findProperty('sonatypePassword')
+
+//ext.admin = hasProperty('sonatypeUsername')
 
 artifacts {
     archives jar
@@ -161,109 +179,173 @@ signing {
 //    }
 //}
 
+//publishing {
+//    publications {
+//        mavenJava(MavenPublication) {
+//            from components.java
+//            customizePom(pom, rootProject)
+//
+//            artifact sourcesJar
+//            artifact javadocJar
+//        }
+//    }
+//    repositories {
+//        maven {
+//            //url "https://s01.oss.sonatype.org/service/local/"
+//            url "https://oss.sonatype.org/service/local/staging/deploy/maven2"
+//            if (admin) {
+//                credentials {
+//                    username sonatypeUsername
+//                    password sonatypePassword
+//                }
+//            }
+//        }
+//    }
+//}
+//
+//model {
+//    tasks.publish {
+//        dependsOn(project.tasks.build)
+//    }
+//    tasks.install {
+//        dependsOn(project.tasks.build)
+//    }
+//}
+//
+//def customizePom(pom, gradleProject) {
+//    pom.withXml {
+//        def root = asNode()
+//        // modify POM and add optional flag where needed
+//        root.dependencies.'*'.findAll {
+//
+//            ext.artifactId = it.artifactId.text()
+//            ext.fulldep = it.groupId.text() + ':' + it.artifactId.text() + ':' + it.version.text()
+//        }
+//
+//        // add all items necessary for maven central publication
+//        root.children().last() + {
+//            println("Name:" + gradleProject.name)
+//            description gradleProject.description// moduleDescription
+//            resolveStrategy = Closure.DELEGATE_FIRST
+//
+//            name 'Repo Qreasp'
+//            description gradleProject.description
+//            url 'https://github.com/softknife2021/qreasp'
+//            organization {
+//                name 'softknife2021'
+//                url 'https://softknife2021.com'
+//            }
+//            issueManagement {
+//                system 'GitHub'
+//                url 'https://github.com/softknife2021/qreasp/issues'
+//            }
+//            licenses {
+//                license {
+//                    name 'The Apache Software License, Version 2.0'
+//                    url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+//                    distribution 'repo'
+//                }
+//            }
+//            scm {
+//                url 'https://github.com/softknife2021/qreasp'
+//                connection 'scm:git:git://github.com/softknife2021/qreasp.git'
+//                developerConnection 'scm:git:ssh://git@github.com/softknife2021/qreasp.git'
+//            }
+//            developers {
+//                developer {
+//                    id 'Alex'
+//                    name 'Alexander Matsaylo'
+//                    email 'softknife2021@gmail.com'
+//                    timezone '+1'
+//                }
+//            }
+//        }
+//    }
+//}
+//
+//testlogger {
+//    theme 'mocha' // project level
+//    slowThreshold 5000
+//}
+//
+//task install(dependsOn: publishToMavenLocal) {
+//    group = 'Publishing'
+//    description = 'Installs artifacts to local Maven repository'
+//}
+//
+////
+//// RELEASE
+////
+//
+//task release() {
+//    group 'Project'
+//    description 'Builds everything for the release.'
+//
+//    dependsOn build
+//    dependsOn javadoc
+//    //dependsOn jacocoTestReport
+//}
+
 publishing {
-    publications {
-        mavenJava(MavenPublication) {
+    publications{
+        javaPubl(MavenPublication){
             from components.java
-            customizePom(pom, rootProject)
-
-            artifact sourcesJar
+            artifact sourceJar
             artifact javadocJar
+            artifactId 'tools' //correct
+            pom {
+                name= "Alexander Matsaylo"
+                description="Tools for release Managment and QA"
+                url = "https://github.com/softknife2021/qreasp"
+                licenses{
+                    license{
+                        name ="Apache license 2.0"
+                        url="https://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers{
+                    developer{
+                        name="Alexander Matsaylo"
+                        email="softknife2021@gmail.com"
+                    }
+                }
+                scm{
+                    connection ="scm:git:https://github.com/softknife2021/qreasp"
+                    developerConnection ="scm:git:git@github.com/softknife2021/qreasp.git"
+                    url="https://github.com/softknife2021/qreasp"
+                }
+            }
         }
     }
+}
+
+//signing {
+//    sign publishing.publications.javaPubl
+//}
+
+
+nexusPublishing {
     repositories {
-        maven {
-            //url "https://s01.oss.sonatype.org/service/local/"
-            url "https://oss.sonatype.org/service/local/staging/deploy/maven2"
-            if (admin) {
-                credentials {
-                    username sonatypeUsername
-                    password sonatypePassword
-                }
-            }
+        sonatype{
+//            username=project.property("user")
+//            password=project.property("password")
+            username=sonatypeUsername
+            password=sonatypePassword
         }
     }
 }
 
-model {
-    tasks.publish {
-        dependsOn(project.tasks.build)
-    }
-    tasks.install {
-        dependsOn(project.tasks.build)
-    }
-}
-
-def customizePom(pom, gradleProject) {
-    pom.withXml {
-        def root = asNode()
-        // modify POM and add optional flag where needed
-        root.dependencies.'*'.findAll {
-
-            ext.artifactId = it.artifactId.text()
-            ext.fulldep = it.groupId.text() + ':' + it.artifactId.text() + ':' + it.version.text()
-        }
-
-        // add all items necessary for maven central publication
-        root.children().last() + {
-            println("Name:" + gradleProject.name)
-            description gradleProject.description// moduleDescription
-            resolveStrategy = Closure.DELEGATE_FIRST
-
-            name 'Repo Qreasp'
-            description gradleProject.description
-            url 'https://github.com/softknife2021/qreasp'
-            organization {
-                name 'softknife2021'
-                url 'https://softknife2021.com'
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            repository(
+                    url: "https://oss.sonatype.org/content/repositories/releases") {
+                authentication(userName: "$user", password: "$password")
             }
-            issueManagement {
-                system 'GitHub'
-                url 'https://github.com/softknife2021/qreasp/issues'
-            }
-            licenses {
-                license {
-                    name 'The Apache Software License, Version 2.0'
-                    url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                    distribution 'repo'
-                }
-            }
-            scm {
-                url 'https://github.com/softknife2021/qreasp'
-                connection 'scm:git:git://github.com/softknife2021/qreasp.git'
-                developerConnection 'scm:git:ssh://git@github.com/softknife2021/qreasp.git'
-            }
-            developers {
-                developer {
-                    id 'Alex'
-                    name 'Alexander Matsaylo'
-                    email 'softknife2021@gmail.com'
-                    timezone '+1'
-                }
+            snapshotRepository(
+                    url: "https://oss.sonatype.org/content/repositories/snapshots") {
+                authentication(userName: "$user", password: "$password")
             }
         }
     }
-}
-
-testlogger {
-    theme 'mocha' // project level
-    slowThreshold 5000
-}
-
-task install(dependsOn: publishToMavenLocal) {
-    group = 'Publishing'
-    description = 'Installs artifacts to local Maven repository'
-}
-
-//
-// RELEASE
-//
-
-task release() {
-    group 'Project'
-    description 'Builds everything for the release.'
-
-    dependsOn build
-    dependsOn javadoc
-    //dependsOn jacocoTestReport
 }
