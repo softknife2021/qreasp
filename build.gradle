@@ -1,0 +1,300 @@
+
+/*
+ * *
+ *  * Created by SOFTKNIFE on 7/1/20
+ *  * Copyright SOFTKNIFE (c) 2021 . All rights reserved.
+ *
+ */
+
+plugins {
+    // Apply the java-library plugin to add support for Java Library
+    id 'java-library'
+    id 'idea'
+    id "com.adarshr.test-logger" version "4.0.0"
+    // Publishing goes to GitHub Packages only (see `publishing` below). The Sonatype Central Portal
+    // plugin, the OSSRH repository and signing were removed in 0.2.0.
+    id 'maven-publish'
+    id "io.freefair.lombok" version "8.13.1"
+    // Static analysis. `./gradlew spotbugsMain` — report in build/reports/spotbugs/main.html.
+    id "com.github.spotbugs" version "6.5.11"
+}
+
+repositories {
+    mavenCentral()
+    maven { url = "https://m2proxy.atlassian.com/repository/public" }
+    maven { url = "https://packages.atlassian.com/mvn/maven-atlassian-external/" }
+}
+
+
+// Java 21. The toolchain pins the JDK the build runs on regardless of what `java` on the PATH
+// is; the foojay resolver in settings.gradle downloads it when it is missing. `release` makes
+// javac refuse any API newer than 21, so the published jar cannot accidentally need a newer JVM.
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    // Published next to the main jar, so consumers' IDEs show sources and docs.
+    withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
+
+group = 'com.softknife'
+description = 'Quality, Release and Automation support'
+
+// 0.2.0: the jar now requires Java 21 at runtime. Consumers on 17 stay on 0.1.8.
+version = '0.2.0'
+
+
+dependencies {
+    api 'com.squareup.okhttp3:okhttp:5.3.2'
+    api "org.seleniumhq.selenium:selenium-java:4.39.0"
+    implementation 'io.github.bonigarcia:webdrivermanager:6.3.3'
+    // Logging API only. The backend (logback, log4j, …) is the consumer's choice — a library that
+    // ships one forces it on everybody who depends on it.
+    implementation 'org.slf4j:slf4j-api:2.0.17'
+    implementation group: 'org.aeonbits.owner', name: 'owner', version: '1.0.12'
+    implementation group: 'org.apache.commons', name: 'commons-exec', version: '1.6.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
+
+    //json/models
+    // Jackson 2 — every import in the code is com.fasterxml.jackson.*. The Jackson 3 artifacts
+    // (tools.jackson.*) declared here before were never used, and the Jackson 2 that was used arrived
+    // transitively and unpinned. Pinned to the version that was resolving, so behaviour is unchanged.
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.19.2'
+    implementation group: 'com.jayway.jsonpath', name: 'json-path', version: '2.10.0'
+    implementation group: 'net.minidev', name: 'json-smart', version: '2.6.0'
+    // Used directly by GenericUtils.generateJsonPatch; previously only present transitively.
+    implementation 'com.github.java-json-tools:json-patch:1.13'
+
+    //jira
+    api 'io.atlassian.fugue:fugue:6.1.2'
+    api 'com.atlassian.jira:jira-rest-java-client-core:6.0.2'
+    api 'com.atlassian.jira:jira-rest-java-client-api:6.0.2'
+
+    implementation group: 'org.freemarker', name: 'freemarker', version: '2.3.34'
+
+    //apache
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.15.0'
+    implementation group: 'commons-io', name: 'commons-io', version: '2.21.0'
+    implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.5.0'
+
+    // This dependency is used internally, and not exposed to consumers on their own compile classpath.
+    implementation ('com.google.guava:guava:33.5.0-jre')
+
+    //openapi
+    implementation group: 'io.swagger.core.v3', name: 'swagger-core', version: '2.2.41'
+    implementation group: 'io.swagger.core.v3', name: 'swagger-models', version: '2.2.41'
+    implementation group: 'io.swagger.parser.v3', name: 'swagger-parser-v3', version: '2.1.37'
+
+    //for creating request body
+    implementation group: 'io.swagger', name: 'swagger-inflector', version: '2.0.14'
+
+    //mocking — WireMockManager is part of the public API
+    implementation group: 'org.wiremock', name: 'wiremock-standalone', version: '3.13.2'
+
+    // TestNG annotations for GenericDataProvider / JsonDataProvider. compileOnly: consumers run their
+    // own TestNG and must not have this library pick the version for them.
+    compileOnly group: 'org.testng', name: 'testng', version: '7.11.0'
+
+    testImplementation group: 'org.testng', name: 'testng', version: '7.11.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:5.3.2'
+    // Test logging backend; tests also inspect log output (ListAppender).
+    testImplementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.5.24'
+}
+
+tasks.withType(Javadoc).configureEach {
+    // Keep the lombok plugin's delomboked sources as input. Replacing `source` with the raw
+    // sources hid Lombok-generated types (WebDriverState.WebDriverStateBuilder) from javadoc.
+    exclude '**/*.zip'
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+//
+// STATIC ANALYSIS — SpotBugs
+//
+// `./gradlew spotbugsMain` writes build/reports/spotbugs/main.html (and main.xml for CI).
+// It runs as part of `check`/`build` and FAILS the build on any finding. The report was brought to
+// zero in 0.2.0; every accepted finding is an entry in config/spotbugs/exclude.xml with its reason.
+//
+spotbugs {
+    ignoreFailures = false
+    effort = com.github.spotbugs.snom.Effort.valueOf("MAX")
+    reportLevel = com.github.spotbugs.snom.Confidence.valueOf("MEDIUM")
+    excludeFilter = file('config/spotbugs/exclude.xml')
+}
+
+spotbugsMain {
+    reports {
+        html {
+            required = true
+            outputLocation = layout.buildDirectory.file('reports/spotbugs/main.html')
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+            outputLocation = layout.buildDirectory.file('reports/spotbugs/main.xml')
+        }
+    }
+}
+
+// Test code is analysed on demand only (`./gradlew spotbugsTest`), not on every build.
+spotbugsTest {
+    enabled = false
+}
+
+//
+// TESTS
+//
+//   ./gradlew test         unit tests: no browser, no internet (local WireMock / MockWebServer only)
+//   ./gradlew networkTest  tests that call public hosts (petstore.swagger.io, httpbin.org, …)
+//   ./gradlew browserTest  WebDriver tests: headless Chrome and internet access
+//
+// Every test gets a default TestNG timeout (DefaultTimeoutTransformer) and every task a hard
+// timeout, so one stuck browser session cannot hold the build.
+//
+def browserTestClasses = ['**/webdriver/BrowserContext*Test.class', '**/webdriver/WebDriverTest.class']
+def defaultTimeoutListener = 'com.softknife.testsupport.DefaultTimeoutTransformer'
+
+tasks.withType(Test).configureEach {
+    timeout = java.time.Duration.ofMinutes(15)
+    testLogging {
+        events "passed", "skipped", "failed", "standardOut", "standardError"
+    }
+}
+
+test {
+    description = 'Unit tests: no browser and no internet access needed.'
+    useTestNG {
+        excludeGroups 'network'
+        listeners << defaultTimeoutListener
+    }
+    exclude browserTestClasses
+}
+
+tasks.register('networkTest', Test) {
+    group = 'verification'
+    description = 'Tests that call public internet hosts.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useTestNG {
+        includeGroups 'network'
+        listeners << defaultTimeoutListener
+    }
+    exclude browserTestClasses
+}
+
+tasks.register('browserTest', Test) {
+    group = 'verification'
+    description = 'WebDriver tests: need Chrome (run headless) and internet access.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useTestNG {
+        listeners << defaultTimeoutListener
+    }
+    include browserTestClasses
+}
+
+//
+// PUBLISHING — GitHub Packages
+//
+//   ./gradlew publish      builds, tests, then uploads to https://maven.pkg.github.com/softknife2021/qreasp
+//
+// The `maven` publication carries the main jar, the sources and javadoc jars, and a POM with
+// runtime dependencies only (compileOnly/test dependencies are not in it).
+//
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            customizePom(pom, rootProject)
+        }
+    }
+    repositories {
+        // Credentials come from ~/.gradle/gradle.properties (gpr.user / gpr.key) or, in GitHub
+        // Actions, from GITHUB_ACTOR / GITHUB_TOKEN. Never put a token in this file.
+        // Step-by-step instructions: IMPROVEMENTS.md, section "Publishing to GitHub Packages".
+        maven {
+            name = 'GitHubPackages'
+            url = uri('https://maven.pkg.github.com/softknife2021/qreasp')
+            credentials {
+                username = findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+                password = findProperty('gpr.key') ?: System.getenv('GITHUB_TOKEN')
+            }
+        }
+    }
+}
+
+tasks.named('publish') {
+    dependsOn tasks.named('build')
+}
+
+def customizePom(pom, gradleProject) {
+    pom.withXml {
+        def root = asNode()
+        // add all items necessary for maven central publication
+        root.children().last() + {
+            resolveStrategy = Closure.DELEGATE_FIRST
+
+            name 'Repo Qreasp'
+            description gradleProject.description
+            url 'https://github.com/softknife2021/qreasp'
+            issueManagement {
+                system 'GitHub'
+                url 'https://github.com/softknife2021/qreasp/issues'
+            }
+            licenses {
+                license {
+                    name 'The Apache Software License, Version 2.0'
+                    url 'https://github.com/softknife2021/qreasp/blob/main/LICENSE'
+                    distribution 'repo'
+                }
+            }
+            scm {
+                url 'https://github.com/softknife2021/qreasp'
+                connection 'scm:git:git://github.com/softknife2021/qreasp.git'
+                developerConnection 'scm:git:ssh://git@github.com/softknife2021/qreasp.git'
+            }
+            developers {
+                developer {
+                    id 'ed'
+                    name 'Ed Vayn'
+                    email 'restbusterstech@gmail.com'
+                    timezone '+1'
+                }
+                developer {
+                    id 'Alex'
+                    name 'Alexander Matsaylo'
+                    email 'restbusterstech@gmail.com'
+                    timezone '+1'
+                }
+            }
+        }
+    }
+}
+
+testlogger {
+    theme = 'mocha' // project level
+    slowThreshold = 5000
+}
+
+tasks.register('install') {
+    group = 'Publishing'
+    description = 'Installs artifacts to local Maven repository'
+    dependsOn tasks.named('build'), tasks.named('publishToMavenLocal')
+}
+
+//
+// RELEASE
+//
+
+tasks.register('release') {
+    group = 'Project'
+    description = 'Builds everything for the release.'
+    dependsOn tasks.named('build'), tasks.named('javadoc')
+}

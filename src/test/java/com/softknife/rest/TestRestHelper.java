@@ -1,0 +1,265 @@
+package com.softknife.rest;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jayway.jsonpath.JsonPath;
+import com.softknife.data.templating.TemplateManager;
+import com.softknife.exception.RecordNotFound;
+import com.softknife.http.helper.HttpRequestHelper;
+import com.softknife.resource.GlobalResourceManager;
+import com.softknife.rest.client.ConstantsErrors;
+import com.softknife.rest.client.CustomHeaderInterceptor;
+import com.softknife.rest.client.HttpMethods;
+import com.softknife.rest.client.RestClientHelper;
+import com.softknife.rest.model.HttpRequest;
+import com.softknife.util.common.RBFileUtils;
+import com.softknife.util.performance.PerformanceTestUtil;
+import com.softknife.util.wiremock.WireMockManager;
+import freemarker.template.TemplateException;
+import okhttp3.OkHttpClient;
+import okhttp3.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.testng.Assert;
+import org.testng.ITestContext;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
+
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * @author Sasha Matsaylo on 9/17/19
+ * @project qreasp
+ */
+public class TestRestHelper {
+
+    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private final String userName = "test";
+    private final String password = "password";
+    private final Map<String, String> headers = new HashMap<>();
+    private final String requestBody = "{\\\"key\\\": \\\"value\\\"}";
+    private final ObjectMapper objectMapper = GlobalResourceManager.getInstance().getObjectMapper();
+    private OkHttpClient okHttpClient;
+    private final String commonUrl = "https://httpbin.org/anything";
+    private final String headerKey = "Headerkey";
+    private final String headerValue = "headerValue";
+    private WireMockManager wireMockManager;
+    private TemplateManager tmpMgr;
+    private String[] extension;
+
+    public TestRestHelper() {
+        extension = new String[0];
+    }
+
+    @BeforeClass(alwaysRun = true)
+    public void setUp() throws IOException {
+        this.headers.put(this.headerKey, this.headerValue);
+        String wireMockJsonStubs = RBFileUtils.getFileOnClassPathAsString("wiremock/wiremock-stubs.json");
+        this.wireMockManager = WireMockManager.getInstance(wireMockJsonStubs);
+        this.okHttpClient = RestClientHelper.getInstance().buildBasicAuthClient(userName, password);
+        this.extension = new String[]{"ftl,json"};
+        this.tmpMgr = new TemplateManager("src/test/resources/payload/template", extension, true, ";", "=");
+    }
+
+
+    @Test
+    public void testCreate2NewRestClient() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("headerName", "headerValue");
+        RestClientHelper.getInstance().registerLoggerInterceptorForSharedClient();
+        OkHttpClient okHttpClient1 = this.okHttpClient;
+        OkHttpClient okHttpClient2 = RestClientHelper.getInstance().buildBasicAuthClient("myUser", "mypassword", headers);
+        Assert.assertFalse(okHttpClient1.equals(okHttpClient2));
+    }
+
+
+    @Test(groups = "network")//(threadPoolSize = 3, invocationCount = 6)
+    public void testDoGetRequest() throws IOException {
+        HttpRequest httpRequest = new HttpRequest(HttpMethods.GET.getValue(), this.commonUrl);
+        try (Response response = RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest)) {
+            Assert.assertEquals(response.code(), 200);
+        }
+    }
+
+
+    @Test(groups = "network")
+    public void testDoPostRequestWithObject() throws IOException {
+        HttpRequest httpRequest = new HttpRequest(HttpMethods.POST.getValue(), this.commonUrl);
+        httpRequest.setRequestBody(this.requestBody);
+        httpRequest.setContentType("application/xml");
+        try (Response response = RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest)) {
+            Assert.assertEquals(response.code(), 200);
+        }
+    }
+
+    @Test(enabled = false)
+    public void verifyHeadersSetOnBearerClientCreation() throws Exception {
+        OkHttpClient bearerClient = RestClientHelper.getInstance().buildBearerClient("token", this.headers);
+        HttpRequest httpRequest = new HttpRequest(HttpMethods.POST.getValue(), this.commonUrl);
+        httpRequest.setRequestBody(this.requestBody);
+        httpRequest.setContentType("application/json");
+        Response response = RestClientHelper.getInstance().executeRequest(bearerClient, httpRequest);
+        String respBody = response.body().string();
+        Assert.assertEquals(response.code(), 200);
+        String actualHeaderValue = JsonPath.read(respBody, "$.headers." + this.headerKey);
+        Assert.assertEquals(this.headerValue, actualHeaderValue);
+
+    }
+
+    //TODO: needs to be fixed headers are not set on request if provided
+    @Test(enabled = false)
+    public void verifyHeadersSetOnRequestAfterClientIsCreated() throws Exception {
+        String headerKey = "jenkins";
+        String headerValue = "headerValue";
+        OkHttpClient basicAuthClient = RestClientHelper.getInstance().buildBasicAuthClient("user", "password");
+        HttpRequest httpRequest = new HttpRequest(HttpMethods.POST.getValue(), this.commonUrl);
+        httpRequest.setRequestBody(this.requestBody);
+        Map<String,String> headersForRequest = new HashMap<>();
+        headersForRequest.put(headerKey, headerValue);
+        httpRequest.setHeaders(headersForRequest);
+        Response response = RestClientHelper.getInstance().executeRequest(basicAuthClient, httpRequest);
+        String respBody = response.body().string();
+        Assert.assertEquals(response.code(), 200);
+        String actualHeaderValue = JsonPath.read(respBody, "$.headers." + this.headerKey);
+        Assert.assertEquals(this.headerValue, actualHeaderValue);
+
+    }
+
+    @Test( expectedExceptions = RuntimeException.class,
+            expectedExceptionsMessageRegExp = ConstantsErrors.INVALID_URL)
+    public void testDoPostRequestWithObjectNoUrl() throws IOException {
+        HttpRequest httpRequest = new HttpRequest(HttpMethods.POST.getValue(), "");
+        httpRequest.setUrl("");
+        httpRequest.setHttpMethod(HttpMethods.POST.getValue());
+        httpRequest.setRequestBody(this.requestBody);
+        httpRequest.setContentType("application/xml");
+        RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest);
+    }
+
+    @Test( expectedExceptions = RuntimeException.class,
+            expectedExceptionsMessageRegExp = ConstantsErrors.HTTP_METHOD_INVALID)
+    public void testDoPostRequestWithObjectInvalidHttpMethod() throws IOException {
+        HttpRequest httpRequest = new HttpRequest("Invalid", this.commonUrl);
+        httpRequest.setRequestBody(this.requestBody);
+        httpRequest.setContentType("application/xml");
+        RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest);
+    }
+
+    @Test( expectedExceptions = RuntimeException.class,
+            expectedExceptionsMessageRegExp = ConstantsErrors.HTTP_METHOD_BLANK)
+    public void testDoPostRequestWithObjectAndNullHttpMethod() throws IOException {
+        HttpRequest httpRequest = new HttpRequest(null, this.commonUrl);
+        httpRequest.setRequestBody(this.requestBody);
+        httpRequest.setContentType("application/xml");
+        RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest);
+    }
+
+    @Test( expectedExceptions = RuntimeException.class,
+            expectedExceptionsMessageRegExp = ConstantsErrors.HTTP_METHOD_BLANK)
+    public void testDoPostRequestWithObjectAndBlankHttpMethod() throws IOException {
+        HttpRequest httpRequest = new HttpRequest("", this.commonUrl);
+        httpRequest.setUrl(this.commonUrl);
+        httpRequest.setRequestBody(this.requestBody);
+        httpRequest.setContentType("application/xml");
+        RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest);
+    }
+
+    @Test(groups = "network")
+    public void testDoPutRequest() throws IOException {
+        HttpRequest httpRequest = new HttpRequest(HttpMethods.PUT.getValue(), this.commonUrl);
+        httpRequest.setRequestBody(this.requestBody);
+        try (Response response = RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest)) {
+            Assert.assertEquals(response.code(), 200);
+        }
+    }
+
+
+    @Test(groups = "network")
+    public void testDoPatchRequest() throws IOException {
+        HttpRequest httpRequest = new HttpRequest(HttpMethods.PATCH.getValue(), this.commonUrl);
+        httpRequest.setRequestBody(this.requestBody);
+        try (Response response = RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest)) {
+            System.out.println("testDoPatchRequest response code: " + response.code());
+            System.out.println("testDoPatchRequest response message: " + response.message());
+
+            Assert.assertEquals(response.code(), 200);
+        }
+    }
+
+    @Test(groups = "network")
+    public void testDoDeleteRequestWithRequestBody() throws IOException {
+        HttpRequest httpRequest = new HttpRequest(HttpMethods.DELETE.getValue(), this.commonUrl);
+        httpRequest.setRequestBody(this.requestBody);
+        try (Response response = RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest)) {
+            Assert.assertEquals(response.code(), 200);
+        }
+    }
+
+    @Test(groups = "network")
+    public void testDoDeleteRequestWithNoBody() throws IOException {
+        HttpRequest httpRequest = new HttpRequest(HttpMethods.DELETE.getValue(), this.commonUrl);
+        try (Response response = RestClientHelper.getInstance().executeRequest(okHttpClient, httpRequest)) {
+            Assert.assertEquals(response.code(), 200);
+        }
+    }
+
+    @Test
+    public void buildUrlWithQueryParams() {
+        String url = "http://test/search";
+        String expectedUrl = "http://test/search?test2=t%26%3F&test=t%2Ftkljl";
+        Map<String, String> queryParams = new HashMap<>();
+        queryParams.put("test", "t/tkljl");
+        queryParams.put("test2", "t&?");
+        String actualUrl = RestClientHelper.getInstance().addQueryParams(url, queryParams);
+        Assert.assertEquals(actualUrl, expectedUrl, "url must match");
+    }
+
+
+    @Test(enabled = true)
+    public void get_oath2_token(){
+        Map<String,String> params = new HashMap<>();
+        params.put("param1", "paramValue1");
+        params.put("param2", "paramValue2");
+        params.put("param3", "paramValue3");
+        String token = RestClientHelper.getInstance().getOAuth2Token("http://localhost:8090/oauth/token", params, "$.access_token");
+        Assert.assertEquals(token, "dummytoken", "tokens should match");
+    }
+
+    @Test(groups = "network")//(threadPoolSize = 3, invocationCount = 6)
+    public void testCustomHeaderListener() throws IOException {
+        // Create a client with a custom header interceptor
+        String myCustomHeader = "X-Custom-Header";
+        String myCustomHeaderValue = "CustomValue";
+        OkHttpClient client = RestClientHelper.getInstance().buildNoAuthClient();
+        client = RestClientHelper.getInstance().registerInterceptor(
+                client, new CustomHeaderInterceptor(myCustomHeader, myCustomHeaderValue)
+        );
+
+// Use the client to make requests
+        HttpRequest request = new HttpRequest(HttpMethods.GET.getValue(), "https://httpbin.org/anything");
+        Response response = RestClientHelper.getInstance().executeRequest(client, request);
+        Assert.assertEquals(response.code(), 200);
+        String responseBody = response.body().string();
+        String actualHeaderValue = JsonPath.read(responseBody, "$.headers." + myCustomHeader);
+        Assert.assertEquals(actualHeaderValue, myCustomHeaderValue);
+
+    }
+
+    @Test(groups = "network", description = "test perf util")
+    public void testPerformanceUtil(ITestContext context) throws IOException, TemplateException, RecordNotFound, InterruptedException {
+        HttpRequest request = new HttpRequest(HttpMethods.POST.getValue(), this.commonUrl);
+        request.setRequestBody(this.requestBody);
+        Long startRange = 1L;
+        Long endRange = 1000L;
+        String result = PerformanceTestUtil.runPerformanceTest(
+                this.okHttpClient, request, this.objectMapper, 1, 4, 3, startRange, endRange);
+        Integer expectedTotalRequests = 7;
+        Integer actualTotalRequests = JsonPath.read(result, "$.totalRequests");
+        Assert.assertEquals(actualTotalRequests, expectedTotalRequests, "expected total requests should match actual total requests");
+    }
+
+
+
+}

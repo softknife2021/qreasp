@@ -1,0 +1,12 @@
+/*
+ * Settings for the qreasp build.
+ *
+ * The foojay resolver lets Gradle download the JDK the toolchain asks for (see `java.toolchain`
+ * in build.gradle) when it is not installed locally, so the build compiles on Java 21 on every
+ * machine and in CI without anyone installing a JDK by hand.
+ */
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'qreasp'

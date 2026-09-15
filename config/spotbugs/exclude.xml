@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Findings SpotBugs should not report for this library.
+
+  Keep this list short and explain every entry. An exclusion is a decision that a class of
+  finding is acceptable here; it is not a way to make the report green.
+-->
+<FindBugsFilter xmlns="https://github.com/spotbugs/filter/3.0.0"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/spotbugs/3.1.0/spotbugs/etc/findbugsfilter.xsd">
+
+    <!-- Lombok @Data/@Getter/@Setter expose mutable fields (maps, lists, byte[]) by design in the
+         model classes. Reporting every generated accessor buries the real findings. -->
+    <Match>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- A test-automation library legitimately offers a trust-all client for lab environments.
+         It is opt-in and named for what it does. -->
+    <Match>
+        <Class name="com.softknife.rest.client.RestClientHelper"/>
+        <Method name="buildTrustedHttpClient"/>
+        <Or>
+            <Bug pattern="WEAK_TRUST_MANAGER"/>
+            <Bug pattern="WEAK_HOSTNAME_VERIFIER"/>
+        </Or>
+    </Match>
+
+    <!-- getInstance() hands out the shared instance; that is what a singleton accessor is for.
+         (Turning the singletons into ordinary objects is tracked in IMPROVEMENTS.md, section 4.) -->
+    <Match>
+        <Method name="getInstance"/>
+        <Bug pattern="MS_EXPOSE_REP"/>
+    </Match>
+
+    <!-- Finalizer attacks on partially constructed objects need untrusted code subclassing these
+         clients inside the same JVM. Not a threat model for a test library; the constructors
+         validate their arguments by throwing, which is the behaviour callers rely on. -->
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- GenericUtils.RegexMatcher keeps its non-conventional name as a @Deprecated shim for existing
+         callers; regexMatch is the replacement. Remove this entry when the shim is removed. -->
+    <Match>
+        <Class name="com.softknife.util.common.GenericUtils"/>
+        <Method name="RegexMatcher"/>
+        <Bug pattern="NM_METHOD_NAMING_CONVENTION"/>
+    </Match>
+
+    <!-- SwaggerDescriptorHelper has always had a public constructor next to getInstance(), and
+         callers create their own instances with it. Making it private would break them. -->
+    <Match>
+        <Class name="com.softknife.integraton.swagger.SwaggerDescriptorHelper"/>
+        <Bug pattern="SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR"/>
+    </Match>
+
+</FindBugsFilter>

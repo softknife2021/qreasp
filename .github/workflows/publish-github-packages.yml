@@ -1,0 +1,72 @@
+name: Release
+
+# On a version tag (v0.2.0): check the tag matches build.gradle, build and test, publish the package
+# to GitHub Packages (https://maven.pkg.github.com/softknife2021/qreasp), then create the GitHub Release
+# with docs/release-notes/<version>.md as its text and the jars attached.
+#
+# Uses the GITHUB_TOKEN that Actions provides; no secret has to be created.
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write   # create the GitHub Release
+  packages: write   # publish to GitHub Packages
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the version in build.gradle
+        id: version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          build_version="$(sed -n "s/^version = '\(.*\)'.*/\1/p" build.gradle)"
+          echo "tag=${tag_version} build.gradle=${build_version}"
+          if [ "${tag_version}" != "${build_version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match version '${build_version}' in build.gradle. Bump the version or fix the tag."
+            exit 1
+          fi
+          notes="docs/release-notes/${build_version}.md"
+          if [ ! -f "${notes}" ]; then
+            echo "::error::Release notes ${notes} are missing. Add them before tagging."
+            exit 1
+          fi
+          echo "version=${build_version}" >> "$GITHUB_OUTPUT"
+          echo "notes=${notes}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # `publish` depends on `build`: unit tests and SpotBugs must pass before anything is uploaded.
+      - name: Build, test and publish to GitHub Packages
+        run: ./gradlew publish --no-daemon
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: qreasp ${{ steps.version.outputs.version }}
+          body_path: ${{ steps.version.outputs.notes }}
+          files: |
+            build/libs/qreasp-${{ steps.version.outputs.version }}.jar
+            build/libs/qreasp-${{ steps.version.outputs.version }}-sources.jar
+            build/libs/qreasp-${{ steps.version.outputs.version }}-javadoc.jar
+
+      - name: Upload test and SpotBugs reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-reports
+          path: |
+            build/reports/tests/
+            build/reports/spotbugs/

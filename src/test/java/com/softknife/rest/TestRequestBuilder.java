@@ -1,0 +1,34 @@
+package com.softknife.rest;
+
+import com.softknife.rest.model.HttpRequest;
+import com.softknife.rest.model.HttpRequestBuilder;
+import org.testng.Assert;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
+
+import java.util.HashMap;
+
+/**
+ * @author Sasha Matsaylo on 7/14/21
+ * @project qreasp
+ */
+public class TestRequestBuilder {
+
+    @BeforeClass(alwaysRun = true)
+    private void setUp(){
+
+    }
+
+    @Test
+    public void testRequestBuilder(){
+        HttpRequestBuilder builder = new HttpRequestBuilder("GET", "url")
+                .setUrlParams(new HashMap<>())
+                .setQueryParams(new HashMap<>())
+                .setHeaders(new HashMap<>())
+                .setRequestBody("")
+                .setContentType("");
+
+        HttpRequest httpRequest = builder.build();
+        Assert.assertEquals(httpRequest.getHttpMethod(), "GET");
+    }
+}

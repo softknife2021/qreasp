@@ -1,0 +1,41 @@
+name: CI
+
+# Build, static analysis and the unit tests. `./gradlew test` needs no browser and no internet:
+# the tests that do are in the `browserTest` and `networkTest` tasks (see build.gradle, TESTS).
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The build's toolchain asks for Java 21; setup-java puts one where Gradle finds it, so the
+      # foojay resolver does not need to download anything in CI.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build, unit tests and SpotBugs
+        run: ./gradlew build --no-daemon
+
+      - name: Upload SpotBugs report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotbugs-report
+          path: build/reports/spotbugs/
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/
